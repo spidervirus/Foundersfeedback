@@ -173,12 +173,12 @@ export default function InsightsPage() {
                         {analysis && (
                             <div className="space-y-6">
                                 {[
-                                    { key: 'positioning', title: 'Positioning', color: 'bg-blue-500' },
-                                    { key: 'icp', title: 'ICP Alignment', color: 'bg-purple-500' },
-                                    { key: 'differentiation', title: 'Differentiation', color: 'bg-orange-500' },
-                                    { key: 'pricing', title: 'Pricing Logic', color: 'bg-green-500' },
+                                    { key: 'positioning' as const, title: 'Positioning', color: 'bg-blue-500' },
+                                    { key: 'icp' as const, title: 'ICP Alignment', color: 'bg-purple-500' },
+                                    { key: 'differentiation' as const, title: 'Differentiation', color: 'bg-orange-500' },
+                                    { key: 'pricing' as const, title: 'Pricing Logic', color: 'bg-green-500' },
                                 ].map((dim) => {
-                                    const data = analysis[dim.key as keyof AnalysisData];
+                                    const data = analysis[dim.key];
                                     return (
                                         <Card key={dim.key} className="p-6 bg-white border-slate-100 shadow-sm hover:shadow-md transition-shadow">
                                             <div className="flex justify-between items-center mb-4">
@@ -380,6 +380,8 @@ export default function InsightsPage() {
                             </Card>
                         </div>
                     </div>
-                </DashboardShell>
-                );
+                </div>
+            </div>
+        </DashboardShell>
+    );
 }
