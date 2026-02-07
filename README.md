@@ -1,4 +1,4 @@
-# Founder Feedback Platform
+# Founder Clarity Platform
 
 A platform that gives founders AI-powered strategic analysis and structured peer reviews to get actionable feedback on positioning, ICP clarity, differentiation, and pricing logic.
 

@@ -27,10 +27,21 @@ interface Submission {
         pricing_score: number;
     };
     reviews_completed: number;
+    founder_reports?: {
+        id: string;
+    }[];
+}
+
+interface PendingReview {
+    id: string;
+    landing_page_url: string;
+    stage: string;
+    value_prop: string;
 }
 
 export default function DashboardPage() {
     const [submissions, setSubmissions] = useState<Submission[]>([]);
+    const [pendingReviews, setPendingReviews] = useState<PendingReview[]>([]);
     const [loading, setLoading] = useState(true);
     const supabase = createClient();
 
@@ -60,10 +71,58 @@ export default function DashboardPage() {
                   ),
                   pod_members (
                     reviews_completed
+                  ),
+                  founder_reports (
+                    id
                   )
                 `)
                 .eq('user_id', user.id)
                 .order('created_at', { ascending: false });
+
+            // Fetch Pending Reviews
+            // Logic: Find submissions in pods where I am a member, but NOT my submission, 
+            // and where I haven't reviewed yet.
+            // Simplified for MVP: Get all pod members where user_id = me, then get their pod's OTHER submissions
+            const { data: myMemberships } = await supabase
+                .from('pod_members')
+                .select('pod_id')
+                .eq('user_id', user.id);
+
+            if (myMemberships && myMemberships.length > 0) {
+                const podIds = myMemberships.map(m => m.pod_id);
+
+                // Get submissions in these pods that represent OTHER users
+                const { data: podSubmissions } = await supabase
+                    .from('pod_members')
+                    .select(`
+                        submission:submissions (
+                            id,
+                            landing_page_url,
+                            stage,
+                            value_prop,
+                            user_id
+                        )
+                    `)
+                    .in('pod_id', podIds)
+                    .neq('user_id', user.id); // Exclude myself
+
+                if (podSubmissions) {
+                    // Filter out ones I've already reviewed
+                    // We need to check the 'reviews' table to see if (reviewer_id=me, submission_id=target) exists
+                    const { data: myReviews } = await supabase
+                        .from('reviews')
+                        .select('submission_id')
+                        .eq('reviewer_id', user.id);
+
+                    const reviewedIds = new Set(myReviews?.map(r => r.submission_id) || []);
+
+                    const toReview = podSubmissions
+                        .map((item: any) => item.submission)
+                        .filter((sub: any) => sub && !reviewedIds.has(sub.id));
+
+                    setPendingReviews(toReview);
+                }
+            }
 
             if (subs) {
                 const formattedSubmissions = subs.map(sub => ({
@@ -123,6 +182,31 @@ export default function DashboardPage() {
                     <h1 className="text-3xl font-bold font-heading text-slate-900 mb-2">Your Dashboard</h1>
                     <p className="text-slate-500">Track your product analyses and peer reviews.</p>
                 </div>
+
+                {/* Pending Reviews Section */}
+                {pendingReviews.length > 0 && (
+                    <div className="mb-12">
+                        <h2 className="text-xl font-bold font-heading text-slate-900 mb-4 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                            Pending Reviews
+                        </h2>
+                        <div className="grid md:grid-cols-2 gap-4">
+                            {pendingReviews.map((review) => (
+                                <Card key={review.id} className="p-6 border-orange-100 bg-orange-50/50 flex flex-col justify-between">
+                                    <div>
+                                        <h3 className="font-bold text-slate-900 mb-1">{review.landing_page_url}</h3>
+                                        <p className="text-sm text-slate-600 line-clamp-2 mb-4">{review.value_prop}</p>
+                                    </div>
+                                    <Link href={`/dashboard/reviews/${review.id}`}>
+                                        <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20">
+                                            Write Review →
+                                        </Button>
+                                    </Link>
+                                </Card>
+                            ))}
+                        </div>
+                    </div>
+                )}
                 <Link href="/submit">
                     <Button className="bg-blue-600 text-white shadow-lg shadow-blue-600/20" size="lg">
                         + New Analysis
@@ -151,6 +235,7 @@ export default function DashboardPage() {
             ) : (
                 <div className="grid gap-6">
                     {submissions.map((sub: any) => {
+                        const hasAnalysis = sub.analysis || (sub.founder_reports && sub.founder_reports.length > 0);
                         const avgScore = sub.analysis ? getAverageScore(sub.analysis) : 0;
                         const isMatched = sub.status === 'matched' || sub.status === 'reviewed';
                         const isLocked = isMatched && (sub.reviews_completed || 0) < 2;
@@ -167,6 +252,11 @@ export default function DashboardPage() {
                                             }`}>
                                             <span className="text-2xl font-black">{avgScore}</span>
                                             <span className="text-[10px] font-bold uppercase opacity-70 tracking-tighter">Avg Score</span>
+                                        </div>
+                                    ) : hasAnalysis ? (
+                                        <div className="w-20 h-20 rounded-2xl bg-blue-50 text-blue-600 border-4 border-blue-100 flex flex-col items-center justify-center">
+                                            <span className="text-2xl">✅</span>
+                                            <span className="text-[10px] font-bold uppercase opacity-70 tracking-tighter">Ready</span>
                                         </div>
                                     ) : (
                                         <div className="w-20 h-20 rounded-2xl bg-slate-100 flex items-center justify-center text-2xl">
@@ -208,11 +298,11 @@ export default function DashboardPage() {
 
                                 {/* Actions */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2 w-full lg:w-48">
-                                    <Link href={sub.analysis ? `/analysis/${sub.analysis.id}` : '#'}>
+                                    <Link href={hasAnalysis ? `/analysis/${sub.id}` : '#'}>
                                         <Button
                                             variant="outline"
                                             className="w-full h-9 border-slate-200 text-sm"
-                                            disabled={!sub.analysis}
+                                            disabled={!hasAnalysis}
                                         >
                                             View AI Report
                                         </Button>
@@ -253,7 +343,7 @@ export default function DashboardPage() {
                                         <Button
                                             className="w-full h-9 bg-slate-900 text-white text-sm"
                                             onClick={() => handleMatch(sub.id)}
-                                            disabled={sub.status === 'pending' || !sub.analysis}
+                                            disabled={sub.status === 'pending' || !hasAnalysis}
                                         >
                                             Find Peer Match
                                         </Button>

@@ -18,7 +18,7 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Founder Feedback",
+  title: "Founder Clarity ",
   description: "Get instant, honest feedback on your landing page and positioning.",
   icons: {
     icon: '/favicon.png',

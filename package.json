@@ -14,7 +14,9 @@
     "@supabase/supabase-js": "^2.94.1",
     "axios": "^1.13.4",
     "cheerio": "^1.2.0",
+    "dotenv": "^17.2.4",
     "next": "16.1.6",
+    "openai": "^6.18.0",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },

@@ -56,7 +56,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
                             <Link href="/dashboard" className="flex-shrink-0 flex items-center gap-2">
                                 <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-md shadow-blue-600/20">F</div>
                                 <span className="text-lg font-bold tracking-tight text-slate-900 font-heading">
-                                    Founder<span className="text-blue-600">Feedback</span>
+                                    Founder<span className="text-blue-600">Clarity</span>
                                 </span>
                             </Link>
 

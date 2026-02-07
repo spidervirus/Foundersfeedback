@@ -2,98 +2,65 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 import { DashboardShell } from '@/components/DashboardShell';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { TextArea } from '@/components/ui/Input';
-import { createClient } from '@/lib/supabase/client';
+import { submitReview } from '@/lib/actions/reviews';
 
-interface SubmissionToReview {
-    landing_page_url: string;
-    target_customer: string;
-    value_prop: string;
-}
-
-interface PodMemberData {
-    pod_id: string;
-    submission_id: string;
-    submissions: SubmissionToReview;
-}
-
-export default function ReviewFormPage() {
+export default function ReviewSubmissionPage() {
     const params = useParams();
     const router = useRouter();
-    const supabase = createClient();
-    const [memberData, setMemberData] = useState<PodMemberData | null>(null);
+    const submissionId = params.id as string;
+    const [submission, setSubmission] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
-    const [answers, setAnswers] = useState({
-        q1: '',
-        q2: '',
-        q3: '',
-        q4: '',
-    });
+    const supabase = createClient();
 
     useEffect(() => {
-        const fetchMemberData = async () => {
-            try {
-                const { data, error } = await supabase
+        const fetchSubmission = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+
+            // 1. Fetch submission details
+            const { data: sub, error } = await supabase
+                .from('submissions')
+                .select('*')
+                .eq('id', submissionId)
+                .single();
+
+            if (sub) {
+                // 2. Fetch pod ID to ensure membership
+                const { data: podMember } = await supabase
                     .from('pod_members')
-                    .select(`
-              pod_id,
-              submission_id,
-              submissions (
-                landing_page_url,
-                target_customer,
-                value_prop
-              )
-            `)
-                    .eq('id', params.id)
+                    .select('pod_id')
+                    .eq('submission_id', submissionId)
+                    .limit(1)
                     .single();
 
-                if (data) {
-                    setMemberData(data as any);
+                if (podMember) {
+                    setSubmission({ ...sub, pod_id: podMember.pod_id });
+                } else {
+                    setSubmission(sub);
                 }
-            } catch (err) {
-                console.error('Fetch error:', err);
-            } finally {
-                setLoading(false);
             }
+            setLoading(false);
         };
+        fetchSubmission();
+    }, [submissionId, supabase]);
 
-        fetchMemberData();
-    }, [params.id, supabase]);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (formData: FormData) => {
         setSubmitting(true);
+        formData.append('submissionId', submissionId);
+        formData.append('podId', submission?.pod_id);
 
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user || !memberData) return;
+        const result = await submitReview(formData);
 
-            const { error } = await supabase
-                .from('reviews')
-                .insert({
-                    pod_id: memberData.pod_id,
-                    reviewer_id: user.id,
-                    submission_id: memberData.submission_id,
-                    question_1: answers.q1,
-                    question_2: answers.q2,
-                    question_3: answers.q3,
-                    question_4: answers.q4,
-                });
-
-            if (error) {
-                alert(error.message);
-            } else {
-                alert('Review submitted successfully!');
-                router.push('/dashboard/reviews');
-            }
-        } catch (err) {
-            console.error('Submit error:', err);
-            alert('Failed to submit review');
-        } finally {
+        if (result.success) {
+            router.push('/dashboard');
+        } else {
+            alert(result.error || 'Failed to submit review');
             setSubmitting(false);
         }
     };
@@ -101,107 +68,117 @@ export default function ReviewFormPage() {
     if (loading) {
         return (
             <DashboardShell>
-                <div className="animate-pulse space-y-4">
-                    <div className="h-64 bg-slate-200 rounded-2xl" />
+                <div className="animate-pulse space-y-8 py-12">
+                    <div className="h-32 bg-slate-200 rounded-3xl" />
+                    <div className="h-96 bg-slate-100 rounded-3xl" />
                 </div>
             </DashboardShell>
         );
     }
 
-    if (!memberData) {
+    if (!submission) {
         return (
             <DashboardShell>
-                <Card className="text-center py-20">
-                    <h2 className="text-xl font-bold">Review match not found</h2>
-                    <Button onClick={() => router.back()} className="mt-4">Back</Button>
-                </Card>
+                <div className="text-center py-24">
+                    <h2 className="text-2xl font-bold mb-4">Submission Not Found</h2>
+                    <Button onClick={() => router.push('/dashboard')}>Back to Dashboard</Button>
+                </div>
             </DashboardShell>
         );
     }
 
     return (
         <DashboardShell>
-            <div className="max-w-3xl mx-auto mb-10">
-                <h1 className="text-3xl font-bold font-heading text-slate-900 mb-6 italic">Founder Peer Review</h1>
+            <div className="max-w-4xl mx-auto py-8">
+                <div className="mb-8">
+                    <Button variant="outline" onClick={() => router.back()} className="mb-4">← Back</Button>
+                    <h1 className="text-3xl font-bold font-heading text-slate-900">Peer Review</h1>
+                    <p className="text-slate-500">Give brutally honest feedback to help this founder succeed.</p>
+                </div>
 
-                {/* Context Card */}
-                <Card className="bg-slate-900 text-white p-8 mb-10 shadow-2xl overflow-hidden relative border-none">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl pointer-events-none" />
-
-                    <div className="relative z-10">
-                        <div className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-4">You are reviewing</div>
-                        <h2 className="text-2xl font-bold mb-6">
-                            <a href={memberData.submissions.landing_page_url} target="_blank" rel="noopener noreferrer" className="hover:text-blue-300 transition-colors flex items-center gap-2">
-                                {memberData.submissions.landing_page_url.replace(/^https?:\/\//, '')}
-                                <span className="text-sm">↗</span>
-                            </a>
-                        </h2>
-
-                        <div className="grid sm:grid-cols-2 gap-8">
-                            <div>
-                                <p className="text-xs font-bold text-slate-400 uppercase mb-2">Target Customer</p>
-                                <p className="text-slate-100 text-sm leading-relaxed">{memberData.submissions.target_customer}</p>
+                <div className="grid md:grid-cols-2 gap-8">
+                    {/* Startup Information */}
+                    <div className="space-y-6">
+                        <Card className="p-6 bg-slate-50 border-slate-200">
+                            <div className="mb-4">
+                                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-1">Landing Page</h3>
+                                <a href={submission.landing_page_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-medium hover:underline break-all">
+                                    {submission.landing_page_url} ↗
+                                </a>
                             </div>
-                            <div>
-                                <p className="text-xs font-bold text-slate-400 uppercase mb-2">Stated Value Prop</p>
-                                <p className="text-slate-100 text-sm leading-relaxed">{memberData.submissions.value_prop}</p>
+
+                            <div className="mb-4">
+                                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-1">Value Proposition</h3>
+                                <p className="text-slate-800 font-medium">{submission.value_prop}</p>
                             </div>
+
+                            <div className="mb-4">
+                                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-1">Target Customer</h3>
+                                <p className="text-slate-800 font-medium">{submission.target_customer}</p>
+                            </div>
+
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-1">Stage</h3>
+                                <span className="inline-block px-2 py-1 bg-white border border-slate-200 rounded text-xs font-bold text-slate-600">
+                                    {submission.stage}
+                                </span>
+                            </div>
+                        </Card>
+
+                        <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 text-blue-800 text-sm">
+                            <p className="font-bold mb-2">💡 Review Guidelines</p>
+                            <ul className="list-disc pl-4 space-y-1">
+                                <li>Be specific, not generic ("Good job" helps no one).</li>
+                                <li>Focus on the problem/solution fit.</li>
+                                <li>Don't worry about being "nice", worry about being helpful.</li>
+                            </ul>
                         </div>
                     </div>
-                </Card>
 
-                {/* Form Card */}
-                <Card className="bg-white p-10 shadow-xl border-slate-100">
-                    <form onSubmit={handleSubmit} className="space-y-10">
-                        <div className="space-y-6">
-                            <TextArea
-                                label="1. In your own words, who is this product for?"
-                                placeholder="Be honest—is it clear who their buyer is?"
-                                rows={4}
-                                required
-                                value={answers.q1}
-                                onChange={(e) => setAnswers({ ...answers, q1: e.target.value })}
-                            />
-                            <TextArea
-                                label="2. What specific problem do you think it solves?"
-                                placeholder="Does the landing page make the pain point obvious?"
-                                rows={4}
-                                required
-                                value={answers.q2}
-                                onChange={(e) => setAnswers({ ...answers, q2: e.target.value })}
-                            />
-                            <TextArea
-                                label="3. Would YOU pay for this? Why or why not?"
-                                placeholder="If not, what is the missing piece?"
-                                rows={4}
-                                required
-                                value={answers.q3}
-                                onChange={(e) => setAnswers({ ...answers, q3: e.target.value })}
-                            />
-                            <TextArea
-                                label="4. What part of the landing page was most confusing?"
-                                placeholder="Copy, design, features, pricing?"
-                                rows={4}
-                                required
-                                value={answers.q4}
-                                onChange={(e) => setAnswers({ ...answers, q4: e.target.value })}
-                            />
-                        </div>
+                    {/* Review Form */}
+                    <div>
+                        <Card className="p-8 shadow-lg border-slate-100">
+                            <form action={handleSubmit} className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-900 mb-2">
+                                        1. Does the value proposition make sense immediately?
+                                    </label>
+                                    <TextArea name="question1" rows={3} required placeholder="Yes/No, because..." />
+                                </div>
 
-                        <div className="pt-6 flex gap-4">
-                            <Button type="button" variant="outline" onClick={() => router.back()} className="px-8 h-14">
-                                Cancel
-                            </Button>
-                            <Button
-                                type="submit"
-                                disabled={submitting}
-                                className="flex-1 bg-blue-600 text-white h-14 text-lg font-bold shadow-lg shadow-blue-600/20"
-                            >
-                                {submitting ? 'Submitting...' : 'Submit Review →'}
-                            </Button>
-                        </div>
-                    </form>
-                </Card>
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-900 mb-2">
+                                        2. Who do you think this product is actually for?
+                                    </label>
+                                    <p className="text-xs text-slate-500 mb-2">Describes the user you imagine would use this.</p>
+                                    <TextArea name="question2" rows={3} required placeholder="I imagine a user who..." />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-900 mb-2">
+                                        3. What is the biggest risk you see?
+                                    </label>
+                                    <TextArea name="question3" rows={3} required placeholder="The risk is..." />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-900 mb-2">
+                                        4. If you could change one thing, what would it be?
+                                    </label>
+                                    <TextArea name="question4" rows={3} required placeholder="I would change..." />
+                                </div>
+
+                                <Button
+                                    type="submit"
+                                    className="w-full bg-blue-600 text-white shadow-lg shadow-blue-600/20"
+                                    disabled={submitting}
+                                >
+                                    {submitting ? 'Submitting Review...' : 'Submit Feedback'}
+                                </Button>
+                            </form>
+                        </Card>
+                    </div>
+                </div>
             </div>
         </DashboardShell>
     );

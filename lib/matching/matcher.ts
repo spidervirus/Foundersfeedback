@@ -23,7 +23,7 @@ export async function findMatch(submissionId: string) {
         .eq('status', 'analyzed') // 'analyzed' means ready for matching
         .eq('stage', currentSubmission.stage) // Match by stage (Pre-Revenue, Scaling, etc.)
         .neq('user_id', currentSubmission.user_id) // Don't match with self
-        .limit(2); // We need 2 others to form a pod of 3
+        .limit(1); // We need 1 other to form a pod of 2 (MVP)
 
     if (candidateError) {
         console.error('Error finding candidates:', candidateError);
@@ -31,7 +31,8 @@ export async function findMatch(submissionId: string) {
     }
 
     // 3. Check if we have enough candidates to form a pod
-    if (candidates && candidates.length >= 2) {
+    // MVP UPDATE: Allow pods of 2 for easier testing/bootstrapping
+    if (candidates && candidates.length >= 1) {
         // FOUND A MATCH! Form a pod.
         const podMembers = [currentSubmission, ...candidates];
 

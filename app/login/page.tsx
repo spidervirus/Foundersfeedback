@@ -49,7 +49,7 @@ export default function LoginPage() {
                     <div className="text-center mb-8">
                         <Link href="/" className="inline-block mb-6">
                             <span className="text-2xl font-bold font-heading text-slate-900">
-                                Founder<span className="text-blue-600">Feedback</span>
+                                Founder<span className="text-blue-600">Clarity</span>
                             </span>
                         </Link>
                         <h1 className="text-2xl font-bold text-slate-900 mb-2">Welcome Back</h1>
